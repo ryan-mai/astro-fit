@@ -20,7 +20,7 @@ REFRESH_TOKEN = os.getenv('REFRESH_TOKEN')
 
 access_token = None
 token_expiry = 0
-
+activities_cache = {'data': None, 'ts': 0, 'ttl': 60}
 def refresh_access_token(force=False):
     global access_token, token_expiry
 
@@ -57,14 +57,24 @@ def refresh_access_token(force=False):
 def parse_rate_headers(headers):
     limit = headers.get('X-Ratelimit-Limit', '0,0').split(',')[0]
     usage = headers.get('X-Ratelimit-Usage', '0,0').split(',')[0]
+
     try:
-        return int(limit), int(usage)
+        short_limit = int(limit[0])
+        long_limit = int(limit[1]) if (len(limit)) > 1 else 0
+        short_usage = int(usage[0])
+        long_usage = int(usage[1]) if (len(usage)) > 1 else 0
+
+        return (short_limit, long_limit, short_usage, long_usage)
     except ValueError:
-        return 0, 0
+        return 0, 0, 0, 0
 
 @app.route('/activities', methods=['GET'])
 def get_activities():
     force_refresh = request.args.get('force', 'false').lower() == 'true'
+    
+    if not force_refresh and activities_cache['data'] and time.time() - activities_cache['ts'] < activities_cache['ttl']:
+        return jsonify(activities_cache['data'])
+    
     refresh_access_token(force=force_refresh)
 
     if not access_token:
@@ -79,13 +89,21 @@ def get_activities():
     }
     res = requests.get(ACTIVITIES_URL, headers=header, params=param, verify=False)
     
-    rate_limit, rate_usage = parse_rate_headers(res.headers)
+    short_limit, long_limit, short_usage, long_usage = parse_rate_headers(res.headers)
 
-    if (rate_limit and rate_usage and (rate_usage / rate_limit) > 0.8):
-        app.logger.warning(f'High api usage: {rate_usage} (Rate Limit: {rate_limit})')
-        
+    if (short_limit and short_usage and (short_usage / short_limit) > 0.8):
+        app.logger.warning(f'High api usage: {short_usage} (Rate Limit: {short_limit})')
+
+    if res.status_code == 429:
+        retry = int(res.headers.get('Retry-After', '60'))
+        app.logger.warning(f'Strava rate limited, retrying after {retry}')
+        return jsonify({'error': 'rate_limited', 'retry_after': retry}), 429
+
     if res.status_code == 200:
-        return jsonify(res.json())
+        data = res.json()
+        activities_cache['data'] = data
+        activities_cache['ts'] = time.time()
+        return jsonify(data)
     else:
         app.logger.error(f'There was an error - {res.status_code}: {res.text}')
         return jsonify({'error': res.text}), res.status_code
