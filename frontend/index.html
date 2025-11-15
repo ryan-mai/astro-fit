@@ -16,10 +16,65 @@
 
     <script src="https://unpkg.com/@turf/turf@7.2.0/turf.min.js"></script>
     <script src="Polyline.encoded.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <!-- <link rel="stylesheet" href="styles.css"> -->
+    
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/hero.css">
 </head>
 <body>
-    <div id="map"></div>
-    <script src="main.js"></script>
+    <main class="hero">
+        <section class="hero-left">
+            <header class="hero-left-header">
+                <span id="hero-time">06:07</span>
+                <span id="hero-date">6.7.2067</span>
+            </header>
+
+            <div class="hero-left-content">
+                <h1 class="hero-title">Astro-Fit</h1>
+                <p class="hero-text">
+                    You are an astronaut sent by NASA to study and research extraterrestrial life.
+                </p>
+                <p class="hero-text">
+                    To survive, you must adapt to the environment with fitness.
+                </p>
+                <p class="hero-text">
+                    Good luck pal, you'll need it!
+                </p>
+
+                <button id="start-mission-btn" class="btn-primary">
+                    Start Mission
+                </button>
+            </div>
+
+            <div class="hero-left-planet">
+                <img src="img/moon.jpg" alt="The Moon!">
+            </div>
+        </section>
+
+        <section class="hero-right">
+            <header class="hero-right-header">
+                <h2>Your Collection</h2>
+            </header>
+
+            <div class="hero-right-planet">
+                <img id="planet-image" src="img/moon.jpg" alt="Current Planet">
+            </div>
+
+            <div class="hero-right-footer">
+                <button class="btn-secondary">Current Exploring!</button>
+
+                <div class="carousel-dots">
+                    <button class="dot active" data-index="0"></button>
+                    <button class="dot" data-index="1"></button>
+                    <button class="dot" data-index="2"></button>
+                </div>
+            </div>
+            
+        </section>
+    </main>
+    <!-- <div id="map"></div> -->
+    <!-- <script src="main.js"></script> -->
 </body>
 </html>
