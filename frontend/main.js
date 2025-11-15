@@ -27,6 +27,65 @@ L.marker([0, 0]).addTo(map).bindPopup('Middle').openPopup();
 // THIS IS FROM JSON DATA SAVED
 const activityLayers = [];
 
+function applySelection(value) {
+  activityLayers.forEach(activity => {
+    if (map.hasLayer(activity.layer)) map.removeLayer(activity.layer);
+  });
+
+  if (value === 'all') {
+    activityLayers.forEach(activity => {
+      map.addLayer(activity.layer);
+    });
+    return;
+  }
+
+  const idx = Number(value);
+  const entry = activityLayers.find(activity => activity.index === idx);
+  
+  if (entry) map.addLayer(entry.layer);
+
+}
+
+function createActivityLayers() {
+  const control = L.control({ position: 'topright' });
+
+  control.onAdd = function() {
+    const container = L.DomUtil.create('div', 'activity-control');
+    container.style.background = 'white';
+    container.style.padding = '6px';
+    container.style.borderRadius = '4px';
+    container.style.maxHeight = '220px';
+    container.style.overflowY = 'auto';
+
+    const select = document.createElement('select');
+    select.id = 'activity-select';
+    select.style.width = '220px';
+
+    const options = document.createElement('option')
+    options.value = 'all';
+    options.text = 'Reveal all';
+    select.appendChild(options);
+
+    activityLayers.forEach(activity => {
+      const option = document.createElement('option');
+      option.value = String(activity.index);
+      option.text = activity.label;
+      select.appendChild(option);
+    });
+
+    select.addEventListener('change', (e) => {
+      applySelection(e.target.value);
+    });
+
+    container.appendChild(select);
+
+    L.DomEvent.disableClickPropagation(container);
+    return container;
+  };
+
+  control.addTo(map);
+}
+
 async function fetchActivities() {
   try {
     const res = await fetch('./data.json', { cache: 'no-store' });
@@ -61,17 +120,35 @@ function showActivities(activities) {
     console.warn('Activities did not return an array/list', activities);
     return;
   }
-  activities.forEach(activity => {
+
+  activityLayers.length = 0;
+
+  activities.forEach((activity, idx) => {
     const polyline = activity?.map?.summary_polyline;
     if (!polyline) return;
 
     const latlng = L.Polyline.fromEncoded(polyline).getLatLngs();
+    
+    const layer = L.layerGroup();
     L.polyline(
       latlng,
       { color: 'red' }
-    ).addTo(map);
+    ).addTo(layer);
+
+    const label = activity.start_date_local
+      ? new Date(activity.start_date_local).toLocaleString()
+      : `Activity ${idx}`;
+
+    activityLayers.push({
+      index: idx,
+      id: activity.id ?? idx,
+      label,
+      layer
+    });
   });
-  console.log(activities);
+
+  activityLayers.forEach(activity => map.addLayer(activity.layer));
+  if (activityLayers.length) createActivityLayers();
 }
 
 fetchActivities();
