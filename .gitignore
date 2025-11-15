@@ -1,3 +1,4 @@
 venv/
 backend/.env
 frontend/data.json
+frontend/weather.json
