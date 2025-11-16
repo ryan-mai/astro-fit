@@ -75,14 +75,19 @@ function initGeoloc() {
 // initGeoloc();
 
 const PLANET_LIST = [
-    { name: 'Moon', path: 'models/moon.glb' },
-    { name: 'Mars', path: 'models/mars.glb' },
-    { name: 'Jupiter', path: 'models/jupiter.glb' },
-    { name: 'Saturn', path: 'models/saturn.glb' },
-]
+    { name: 'Sun',   path: 'models/sun.glb',    order: 0 },
+    // { name: 'Mercury', path: 'models/mercury.glb', order: 1 },
+    { name: 'Venus', path: 'models/venus.glb',  order: 2 },
+    { name: 'Earth', path: 'models/earth.glb',  order: 3 },
+    { name: 'Moon',  path: 'models/moon.glb',   order: 4 },
+    { name: 'Mars',  path: 'models/mars.glb',   order: 5 },
+    { name: 'Jupiter', path: 'models/jupiter.glb', order: 6 },
+    // { name: 'Saturn', path: 'models/saturn.glb', order: 7 },
+];
+PLANET_LIST.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
 const planetEl = document.querySelector('.hero-right-planet');
-const carouselEl = document.querySelector('#hero-carousel-dots');
+const carouselEl = document.querySelector('.carousel-dots');
 
 if (!planetEl ) {
     console.warn('Planet or Carousel not found!');
@@ -109,13 +114,19 @@ else {
     scene.add(directionalLight);
 
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('gltf/');
+    dracoLoader.setDecoderPath('./gltf/');
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const pointerPrev = new THREE.Vector2();
 
     let currentPlanet = null;
     let currentPlanetIdx = 0;
     let isPointerDown = false;
+    let isRotating = false;
+    let dragDistX = 0;
     let isLoading = false;
     
     function resizeRenderer() {
@@ -128,6 +139,18 @@ else {
     window.addEventListener('resize', resizeRenderer);
     resizeRenderer();
 
+    function removeModel(model) {
+        if (!model) return;
+        scene.remove(model);
+        model.traverse((obj) => {
+            if (obj.isMesh) {
+                obj.geometry?.dispose();
+                if (Array.isArray(obj.material)) obj.material.forEach((mat) => mat?.dispose());
+                else obj.material?.dispose();
+            }
+        });
+    }
+
     async function loadModel(idx) {
         if (isLoading) return;
         const index = (idx + PLANET_LIST.length) % PLANET_LIST.length;
@@ -137,6 +160,7 @@ else {
 
         try {
             const gltf = await gltfLoader.loadAsync(entry.path);
+            removeModel(currentPlanet);
             currentPlanet = gltf.scene;
             currentPlanet.rotation.set(0, Math.PI / 4, 0);
             currentPlanet.position.set(0, -0.2, 0);
@@ -159,8 +183,95 @@ else {
     function updateCarousel() {
         if (!carouselEl) return;
         const dots = carouselEl.querySelectorAll('.dot');
-
+        dots.forEach((dot) => {
+            const idx = Number(dot.dataset.index);
+            dot.classList.toggle('active', idx === currentPlanetIdx);
+            dot.disabled = isLoading && idx === currentPlanetIdx;
+        });
     }
+
+    function createCarousel() {
+        if (!carouselEl) return;
+        carouselEl.innerHTML = '';
+        PLANET_LIST.forEach((model, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dot';
+            btn.dataset.index = String(idx);
+            btn.setAttribute('aria-label', model.name);
+            btn.addEventListener('click', () => {
+                if (idx !== currentPlanetIdx) loadModel(idx);
+            });
+            if (idx === currentPlanetIdx) btn.classList.add('active');
+            carouselEl.appendChild(btn)
+        });
+    }
+
+    function updateModel(dir) {
+        loadModel(currentPlanetIdx + dir);
+    }
+
+    function getPointer(ev, target) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        target.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        target.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        return target;
+    }
+
+    function getTouching(coord) {
+        if (!currentPlanet) return false;
+        raycaster.setFromCamera(coord, camera);
+        return raycaster.intersectObject(currentPlanet, true).length > 0;
+    }
+
+    function getPointerDown(ev) {
+        if (ev.button !== 0) return;
+        isPointerDown = true;
+        dragDistX = 0;
+        getPointer(ev, pointer);
+        pointerPrev.copy(pointer);
+        isRotating = getTouching(pointer);
+        renderer.domElement.setPointerCapture(ev.pointerId);
+    }
+
+    function getPointerMove(ev) {
+        if (!isPointerDown) return;
+        getPointer(ev, pointer);
+        
+        const dx = pointer.x - pointerPrev.x;
+        const dy = pointer.y - pointerPrev.y;
+        
+        if (isRotating && currentPlanet) {
+            currentPlanet.rotation.y -= dx * -Math.PI;
+            currentPlanet.rotation.x -= dy * Math.PI;
+            currentPlanet.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, currentPlanet.rotation.x));
+        } else {
+            dragDistX += ev.movementX;
+        }
+        pointerPrev.copy(pointer);
+    }
+
+    function releasePointer(ev) {
+        if (!isPointerDown) return;
+        renderer.domElement.releasePointerCapture?.(ev.pointerId);
+        if (!isRotating && currentPlanet) {
+            const dir = dragDistX < 0 ? 1 : -1;
+            updateModel(dir);
+        }
+        isPointerDown = false;
+        dragDistX = 0;
+    }
+
+    renderer.domElement.addEventListener('pointermove', getPointerMove);
+    renderer.domElement.addEventListener('pointerdown', getPointerDown);
+    renderer.domElement.addEventListener('pointerup', releasePointer);
+    renderer.domElement.addEventListener('pointercancel', releasePointer);
+    renderer.domElement.addEventListener('pointerleave', () => {
+        isPointerDown = false;
+        dragDistX = 0;
+    })
+
+
     function animate() {
         requestAnimationFrame(animate);
         if (currentPlanet && !isPointerDown) {
@@ -169,7 +280,8 @@ else {
         renderer.render(scene, camera);
     }
 
+    createCarousel();
+    updateCarousel();
     loadModel(currentPlanetIdx);
     animate();
-
 }
