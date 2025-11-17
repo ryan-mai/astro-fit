@@ -83,7 +83,7 @@ function initGeoloc() {
     navigator.geolocation.getCurrentPosition(onGeoSuccess, onGeoFail, { timeout: 10000 });
 }
 
-// initGeoloc();
+initGeoloc();
 
 const PLANET_LIST = [
     { name: 'Sun',   path: 'models/sun.glb',    order: 0 },

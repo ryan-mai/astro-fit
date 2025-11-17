@@ -73,7 +73,7 @@ function initGeoloc() {
   });
 }
 
-// initGeoloc();
+initGeoloc();
 
 const map = L.map("map").setView([0, 0], 2);
 
