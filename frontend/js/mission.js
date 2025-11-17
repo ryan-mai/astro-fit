@@ -19,6 +19,8 @@ function updateClock() {
 updateClock();
 setInterval(updateClock, 1000);
 
+const API_BASE = window.__API_BASE__ || 'http://127.0.0.1:5000';
+
 async function fetchWeather(lat, lng) {
   try {
     const params = new URLSearchParams({
@@ -27,7 +29,7 @@ async function fetchWeather(lat, lng) {
     });
 
     const res = await fetch(
-      `http://127.0.0.1:5000/api/weather?${params.toString()}`
+      `${API_BASE}/api/weather?${params.toString()}`
     );
 
     if (!res.ok) {

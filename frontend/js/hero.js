@@ -32,15 +32,18 @@ if (startBtn) {
     });
 }
 
+const API_BASE = window.__API_BASE__ || 'http://127.0.0.1:5000';
+
 async function fetchWeather(lat, lng) {
-    try {
-        const params = new URLSearchParams({
-            lat: String(lat),
-            lng: String(lng),
-        });
+  try {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+    });
 
-        const res = await fetch(`http://127.0.0.1:5000/api/weather?${params.toString()}`);
-
+    const res = await fetch(
+      `${API_BASE}/api/weather?${params.toString()}`
+    );
         if (!res.ok) {
             const weatherEl = document.getElementById('hero-weather-text');
             if (weatherEl) weatherEl.textContent = 'Weather could not be fetched';
