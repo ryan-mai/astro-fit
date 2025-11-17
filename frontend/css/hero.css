@@ -30,7 +30,7 @@ body {
 .hero {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    min-width: 100vh;
+    min-height: 100vh;
     background-color: var(--bg-main);
 }
 
@@ -38,7 +38,7 @@ body {
     display: flex;
     flex-direction: column;
     padding: 32px 40px;
-    border-right: 1 px solid #2C2C2C;
+    border-right: 1px solid #2C2C2C;
     background-color: var(--bg-main);
 }
 

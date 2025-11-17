@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astro-Fit</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" rel="stylesheet" />
+
+    <script src="https://unpkg.com/@turf/turf@7.2.0/turf.min.js"></script>
+    <script src="./js/Polyline.encoded.js"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/mission.css">
+</head>
+<body>
+    <main class="mission">
+        <section class="mission-left">
+            <header class="mission-left-header">
+                <div id="mission-time">00:00:00</div>
+                <div id="mission-date">00.00.0000</div>
+            </header>
+
+            <div class="mission-left-content">
+                <h1 id="mission-title" class="mission-title">M-01</h1>
+                <p id="mission-desc" class="mission-text">
+                    Your very first mission on the moon
+                </p>
+
+                <button class="btn-primary" id="start-mission-btn">
+                    Start Mission
+                </button>
+                <p id="mission-weather-text" class="mission-text">
+                    Loading weather...
+                </p>
+
+                <div class="oxygen-tank">
+                    <label for="oxygen-status">Oxygen Tank</label>
+                    <progress id="oxygen-status" value="0" max="100"></progress>
+                </div>
+            </div>
+
+            <!-- <div class="mission-left-planet">
+                <img src="img/moon.jpg" alt="Moon" />
+            </div> -->
+        </section>
+
+        <section class="mission-right">
+            <header class="mission-right-header">
+                Your Map
+            </header>
+
+            <div class="mission-right-planet">
+                <div id="map"></div>
+            </div>
+
+            <footer class="mission-right-footer">
+                <button class="btn-secondary">Current Activity!</button>
+                <div class="carousel-dots"></div>
+            </footer>
+        </section>
+    </main>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <script type="module" src="js/mission.js"></script>
+</body>
+</html>
