@@ -1,8 +1,3 @@
-import * as THREE from "three";
-import Stats from "three/addons/libs/stats.module.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-
 function updateClock() {
   const timeEl = document.getElementById("mission-time");
   const dateEl = document.getElementById("mission-date");
@@ -153,7 +148,7 @@ function createActivityLayers() {
 
 async function fetchActivities() {
   try {
-    const res = await fetch("./data.json", { cache: "no-store" });
+    const res = await fetch("./data_pub.json", { cache: "no-store" });
 
     console.log("Fetching:", res.url, res.status);
 
@@ -328,6 +323,123 @@ function getLayerBounds(layer) {
   return null;
 }
 
+let startState = {
+    canvas: null,
+    ctx: null,
+    stars: [],
+    raf: null,
+    t: 0,
+};
+
+function initCanvas() {
+    const canvas = document.getElementById('mission-canvas');
+    if (!canvas) return;
+    startState.canvas = canvas;
+    startState.ctx = canvas.getContext('2d');
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas, { passive: true });
+}
+
+function resizeCanvas() {
+    const canvas = startState.canvas;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(200, canvas.clientWidth || 300);
+    const height = Math.max(120, canvas.clientHeight || 220);
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    if (startState.ctx) startState.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function clearCanvas() {
+    if (startState.raf) {
+        cancelAnimationFrame(startState.raf);
+        startState.raf = null;
+    }
+    if (startState.ctx && startState.canvas) {
+        startState.ctx.clearRect(0, 0, startState.canvas.width, startState.canvas.height);
+    }
+    startState.stars = [];
+}
+
+function drawCanvas(loc) {
+    initCanvas();
+    const ctx = startState.ctx;
+    const canvas = startState.canvas;
+    if (!ctx || !canvas) return;
+    if (!loc || !loc.length) {
+        clearCanvas();
+        return;
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const points = loc.map(pt => ({ lat: pt.lat, lng: pt.lng }));
+
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const p of points) {
+        if (p.lat < minLat) minLat = p.lat;
+        if (p.lat > maxLat) maxLat = p.lat;
+        if (p.lng < minLng) minLng = p.lng;
+        if (p.lng > maxLng) maxLng = p.lng;
+    }
+    if (minLat === maxLat) { minLat -= 0.01; maxLat += 0.01; }
+    if (minLng === maxLng) { minLng -= 0.01; maxLng += 0.01; }
+
+    const padding = 10;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    const mapX = (lng) => padding + ((lng - minLng) / (maxLng - minLng || 1)) * (w - padding * 2);
+    const mapY = (lat) => padding + ((maxLat - lat) / (maxLat - minLat || 1)) * (h - padding * 2);
+
+    const maxStars = 60;
+    const sampled = points.length > maxStars
+        ? points.filter((_, i) => i % Math.ceil(points.length / maxStars) === 0)
+        : points;
+
+    startState.stars = sampled.map(p => ({
+        x: mapX(p.lng),
+        y: mapY(p.lat),
+        r: 1 + Math.random() * 2,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.02 + Math.random() * 0.04,
+    }));
+
+    if (startState.raf) cancelAnimationFrame(startState.raf);
+    startState.t = 0;
+
+    function frame() {
+        startState.t++;
+        ctx.clearRect(0, 0, w, h);
+        ctx.save();
+        ctx.strokeStyle = "rgba(200,220,255,0.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < startState.stars.length; i++) {
+            const s = startState.stars[i];
+            if (i === 0) ctx.moveTo(s.x, s.y);
+            else ctx.lineTo(s.x, s.y);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        for (const s of startState.stars) {
+            s.phase += s.speed;
+            const alpha = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(s.phase));
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(255,255,230,${alpha.toFixed(2)})`;
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        startState.raf = requestAnimationFrame(frame);
+    }
+
+    frame();
+}
+
+window.addEventListener('load', initCanvas);
+
 function applySelection(value) {
   activityLayers.forEach((activity) => {
     if (map.hasLayer(activity.layer)) map.removeLayer(activity.layer);
@@ -343,6 +455,7 @@ function applySelection(value) {
     if (allBounds.isValid && allBounds.isValid()) {
       map.fitBounds(allBounds, { padding: [40, 40] });
     }
+    clearCanvas();
     return;
   }
 
@@ -359,6 +472,13 @@ function applySelection(value) {
       const first = entry.layer.getLayers && entry.layer.getLayers()[0];
       const latlng = first && (first.getLatLng ? first.getLatLng() : null);
       if (latlng) map.setView(latlng, 13);
+    }
+
+    try {
+        const loc = getLoc(entry.layer);
+        if (loc && loc.length) drawCanvas(loc);
+    } catch (err) {
+        console.error('fck', err);
     }
 
     loadConst().then((geom) => {
@@ -419,6 +539,11 @@ function showActivities(activities) {
         if (loc && loc.length) {
             const match = matchConst(loc, geom);
             console.log('matching constellation', match);
+        }
+        try {
+            drawCanvas(first.layer);
+        } catch (err) {
+            console.error('bruh', err);
         }
     }).catch((e) => console.error('load const failed', e));
   }

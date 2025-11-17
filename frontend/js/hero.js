@@ -3,6 +3,7 @@ import Stats from 'three/addons/libs/stats.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
+
 function updateClock() {
     const timeEl = document.getElementById('hero-time');
     const dateEl = document.getElementById('hero-date');
@@ -23,6 +24,13 @@ function updateClock() {
 
 updateClock();
 setInterval(updateClock, 1000);
+
+const startBtn = document.getElementById('start-mission-btn');
+if (startBtn) {
+    startBtn.addEventListener('click', () => {
+        window.location.href = 'mission.html';
+    });
+}
 
 async function fetchWeather(lat, lng) {
     try {

@@ -108,12 +108,6 @@ body {
     align-items: flex-end;
 }
 
-.mission-left-planet img {
-    width: 90%;
-    max-width: 420px;
-    object-fit: contain;
-}
-
 /* RIGHT SIDE */
 .mission-right {
     display: flex;
