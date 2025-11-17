@@ -112,60 +112,6 @@ setTimeout(() => {
 // THIS IS FROM JSON DATA SAVED
 const activityLayers = [];
 
-function getLayerBounds(layer) {
-  if (!layer) return null;
-  if (typeof layer.getBounds === "function") {
-    const bounds = layer.getBounds();
-    return bounds && bounds.isValid && bounds.isValid() ? l : null;
-  }
-
-  if (typeof layer.getLayers === "function") {
-    const bounds = L.latLngBounds([]);
-    layer.getLayers().forEach((l) => {
-      if (typeof l.getBounds === "function") bounds.extend(l.getBounds());
-      else if (typeof l.getLatLng === "function") bounds.extend(l.getLatLng());
-    });
-    return typeof bounds.isvalid ? bounds : null;
-  }
-  return null;
-}
-
-function applySelection(value) {
-  activityLayers.forEach((activity) => {
-    if (map.hasLayer(activity.layer)) map.removeLayer(activity.layer);
-  });
-
-  if (value === "all") {
-    const allBounds = L.latLngBounds([]);
-    activityLayers.forEach((activity) => {
-      map.addLayer(activity.layer);
-      const bounds = getLayerBounds(activity.layer);
-      if (bounds) allBounds.extend(bounds);
-    });
-    if (allBounds.isvalid && allBounds.isValid()) {
-      map.fitBounds(allBounds, { padding: [40, 40] });
-    }
-    return;
-  }
-
-  const idx = Number(value);
-  const entry = activityLayers.find((activity) => activity.index === idx);
-
-  if (entry) {
-    map.addLayer(entry.layer);
-
-    const bounds = getLayerBounds(entry.layer);
-    if (bounds && bounds.isValid && bounds.isValid()) {
-      map.flyToBounds(bounds, { padding: [30, 30] });
-    } else {
-      const first = entry.layer.getLayers && entry.layer.getLayers()[0];
-      const latlng = first && (first.getLatLng ? first.getLatLng() : null);
-      if (latlng) map.setView(latlng, 13);
-    }
-  }
-}
-
-
 function createActivityLayers() {
   const control = L.control({ position: "topright" });
 
@@ -249,7 +195,7 @@ function pointTouching(point, ring) {
     const deg = point[1];
     let inside = false;
 
-    for (let i = 0, j = ring.length - 1; i < ring.length; i++) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
         const raX = ring[i][0];
         const degX = ring[i][1];
         const raY = ring[j][0];
@@ -265,7 +211,7 @@ function pointInside(point, coords) {
     if (!coords || !coords.length) return false;
     if (!pointTouching(point, coords[0])) return false;
     for (let i = 1; i < coords.length; i++) {
-        if (pointTouching(point, coords[0])) return false;
+        if (pointTouching(point, coords[i])) return false;
     }
     return true;
 }
@@ -331,6 +277,100 @@ function loadConst() {
       .then(j => { window.__CONST_GEO__ = j; return j; });
 }
 
+function getLoc(layer) {
+    const out = [];
+    if (!layer) return out;
+
+    const flattenArray = (arr) => {
+        if (!arr) return;
+        const flatten = (a, target) => {
+            if (!Array.isArray(a)) {
+                if (a && (a.lat !== undefined && a.lng !== undefined)) target.push(a);
+                return;
+            }
+            for (const v of a) flatten(v, target);
+        };
+        flatten(arr, out);
+    };
+
+    if (typeof layer.getLatLngs === 'function') {
+        flattenArray(layer.getLatLng());
+        return out;
+    }
+    if (typeof layer.getLayers === 'function') {
+        layer.getLayers().forEach((l) => {
+            if (typeof l.getLatLngs === 'function') {
+                flattenArray(l.getLatLngs());
+            } else if (typeof l.getLatLng === 'function') {
+                const point = l.getLatLng();
+                if (point) out.push(point)
+            }
+        });
+    }
+    return out;
+}
+
+function getLayerBounds(layer) {
+  if (!layer) return null;
+  if (typeof layer.getBounds === "function") {
+    const bounds = layer.getBounds();
+    return bounds && bounds.isValid && bounds.isValid() ? bounds : null;
+  }
+
+  if (typeof layer.getLayers === "function") {
+    const bounds = L.latLngBounds([]);
+    layer.getLayers().forEach((l) => {
+      if (typeof l.getBounds === "function") bounds.extend(l.getBounds());
+      else if (typeof l.getLatLng === "function") bounds.extend(l.getLatLng());
+    });
+    return (bounds && bounds.isValid && bounds.isValid()) ? bounds : null;
+  }
+  return null;
+}
+
+function applySelection(value) {
+  activityLayers.forEach((activity) => {
+    if (map.hasLayer(activity.layer)) map.removeLayer(activity.layer);
+  });
+
+  if (value === "all") {
+    const allBounds = L.latLngBounds([]);
+    activityLayers.forEach((activity) => {
+      map.addLayer(activity.layer);
+      const bounds = getLayerBounds(activity.layer);
+      if (bounds) allBounds.extend(bounds);
+    });
+    if (allBounds.isValid && allBounds.isValid()) {
+      map.fitBounds(allBounds, { padding: [40, 40] });
+    }
+    return;
+  }
+
+  const idx = Number(value);
+  const entry = activityLayers.find((activity) => activity.index === idx);
+
+  if (entry) {
+    map.addLayer(entry.layer);
+
+    const bounds = getLayerBounds(entry.layer);
+    if (bounds && bounds.isValid && bounds.isValid()) {
+      map.flyToBounds(bounds, { padding: [30, 30] });
+    } else {
+      const first = entry.layer.getLayers && entry.layer.getLayers()[0];
+      const latlng = first && (first.getLatLng ? first.getLatLng() : null);
+      if (latlng) map.setView(latlng, 13);
+    }
+
+    loadConst().then((geom) => {
+        const loc = getLoc(entry.layer);
+        if (loc && loc.length) {
+            const match = matchConst(loc, geom);
+            console.log('match constellation', entry, match)
+        }
+    }) 
+  }
+}
+
 function showActivities(activities) {
   if (!Array.isArray(activities)) {
     console.warn("Activities did not return an array/list", activities);
@@ -375,31 +415,13 @@ function showActivities(activities) {
     loadConst().then((geom) => {
         const first = activityLayers[0];
         if (!first) return;
-        const getLoc = (layer) => {
-            const out = [];
-            if (!layer || typeof layer.getLayers !== 'function') return out;
-            layer.getLayers().forEach((l) => {
-                if (typeof l.getLatLngs === 'function') {
-                    const loc = l.getLatLngs();
-                    const flatten = loc.flat(Infinity);
-                    flatten.forEach(point => {
-                        if (point) out.push(point);
-                    });
-                } else if (typeof l.getLatLng === 'function') {
-                    const point = l.getLatLng();
-                    if (point) out.push(point);
-                }
-            });
-            return out;
-        }
         const loc = getLoc(first.layer);
         if (loc && loc.length) {
             const match = matchConst(loc, geom);
             console.log('matching constellation', match);
         }
-    })
-
-    }
+    }).catch((e) => console.error('load const failed', e));
+  }
   setTimeout(() => {
     try {
       map.invalidateSize();
@@ -408,51 +430,3 @@ function showActivities(activities) {
 }
 
 fetchActivities();
-
-
-// const missions = [
-//     {
-//         "id": "M-01",
-//         "description": "Generate O2 to breathe",
-//         "tasks": [
-//             { "name": "Run/Walk 1km", "completed": false },
-//             { "name": "Sprint 100 meters", "completed": false },
-//             { "name": "Do Jumping Jacks", "completed": false }
-//         ],
-//         "oxygenTank": 0,
-//         "timer": "24:00:01"
-//     }
-// ]
-
-// const missionTitle = document.getElementById('mission-title');
-// const missionDesc = document.getElementById('mission-desc');
-// const taskList = document.getElementById('task-list');
-// const oxygenStats = document.getElementById('oxygen-status');
-// const missionTimer = document.getElementById('mission-timer');
-
-// const currentMission = missions[0];
-// missionTitle.textContent = currentMission?.id;
-// missionDesc.textContent = currentMission?.description;
-// oxygenStats.value = currentMission?.oxygenTank;
-
-// currentMission.tasks.forEach(task => {
-//     const li = document.createElement('li');
-//     li.textContent = task.name;
-//     li.className = task.completed ? 'task-completed' : 'task-pending';
-//     taskList.appendChild(li);
-// });
-
-// let timerInterval;
-// let timePast = 0;
-
-// function startTimer() {
-//     timerInterval = setInterval(() => {
-//         timePast++;
-//         const hr = String(Math.floor(timePast / 3600)).padStart(2, '0');
-//         const mins = String(Math.floor(timePast % 3600)).padStart(2, '0');
-//         const secs = String(timePast % 60).padStart(2, '0');
-//         missionTimer.textContent = `${hr}:${mins}:${secs}`;
-//     }, 1000);
-// }
-
-// startTimer();
