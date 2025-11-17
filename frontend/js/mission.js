@@ -165,6 +165,7 @@ function applySelection(value) {
   }
 }
 
+
 function createActivityLayers() {
   const control = L.control({ position: "topright" });
 
@@ -238,6 +239,98 @@ async function fetchActivities() {
   }
 }
 
+function lngToRa(lng) {
+    const ra = lng >= 0 ? lng : lng + 360;
+    return (ra + 360) % 360;
+}
+
+function pointTouching(point, ring) {
+    const ra = point[0];
+    const deg = point[1];
+    let inside = false;
+
+    for (let i = 0, j = ring.length - 1; i < ring.length; i++) {
+        const raX = ring[i][0];
+        const degX = ring[i][1];
+        const raY = ring[j][0];
+        const degY = ring[j][1];
+        const first_intersect = ((degX > deg) !== (degY > deg));
+        const second_intersect = (ra < (raY - raX) * (deg - degX) / (degY - degX) + raX);
+        if (first_intersect && second_intersect) inside = !inside;
+    }
+    return inside;
+}
+
+function pointInside(point, coords) {
+    if (!coords || !coords.length) return false;
+    if (!pointTouching(point, coords[0])) return false;
+    for (let i = 1; i < coords.length; i++) {
+        if (pointTouching(point, coords[0])) return false;
+    }
+    return true;
+}
+
+function pointInConst(geom, point) {
+    const type = geom.type;
+    const coords = geom.coordinates;
+    if (type === 'Polygon') {
+        return pointInside(point, coords);
+    } else if (type === 'MultiPolygon') {
+        for (const coord of coords) {
+            if (pointInside(point, coord)) return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+function wrapRa(geom, ra, dec) {
+    const cases = [ra, ra + 360, ra - 360];
+    for (const deg of cases) {
+        if (pointInConst(geom, [deg, dec])) return true;
+    }
+    return false
+}
+
+function matchConst(loc, geo) {
+    const points = loc.map(pt => ({
+    ra: lngToRa(pt.lng ?? pt[1]),
+    dec: pt.lat ?? pt[0]
+    }));
+
+    const totalPoints = points.length || 1;
+    let match = {
+        iau: null,
+        score: 0,
+        inside: 0,
+        totalPoints
+    };
+
+    for (const feature of geo.features) {
+        let numInside = 0;
+        for (const pt of points) {
+            if (wrapRa(feature.geometry, pt.ra, pt.dec)) numInside++;
+        }
+        const score = numInside / totalPoints;
+        if (score > match.score) {
+            match = {
+                iau: feature.properties?.iau,
+                score,
+                inside: numInside,
+                totalPoints
+            }
+        }
+    }
+    return match
+}
+
+function loadConst() {
+    if (window.__CONST_GEO__) return Promise.resolve(window.__CONST_GEO__);
+    return fetch('./data/const.geojson', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => { window.__CONST_GEO__ = j; return j; });
+}
+
 function showActivities(activities) {
   if (!Array.isArray(activities)) {
     console.warn("Activities did not return an array/list", activities);
@@ -278,6 +371,34 @@ function showActivities(activities) {
         map.fitBounds(allBounds, { padding: [40, 40] });
     }
     createActivityLayers();
+
+    loadConst().then((geom) => {
+        const first = activityLayers[0];
+        if (!first) return;
+        const getLoc = (layer) => {
+            const out = [];
+            if (!layer || typeof layer.getLayers !== 'function') return out;
+            layer.getLayers().forEach((l) => {
+                if (typeof l.getLatLngs === 'function') {
+                    const loc = l.getLatLngs();
+                    const flatten = loc.flat(Infinity);
+                    flatten.forEach(point => {
+                        if (point) out.push(point);
+                    });
+                } else if (typeof l.getLatLng === 'function') {
+                    const point = l.getLatLng();
+                    if (point) out.push(point);
+                }
+            });
+            return out;
+        }
+        const loc = getLoc(first.layer);
+        if (loc && loc.length) {
+            const match = matchConst(loc, geom);
+            console.log('matching constellation', match);
+        }
+    })
+
     }
   setTimeout(() => {
     try {
@@ -287,6 +408,7 @@ function showActivities(activities) {
 }
 
 fetchActivities();
+
 
 // const missions = [
 //     {

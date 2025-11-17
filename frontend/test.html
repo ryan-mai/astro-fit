@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Polyline → Constellation</title>
+  <style>
+    html,body { margin:0; height:100%; background:#000; }
+    canvas { display:block; width:100%; height:100%; }
+    #ui { position:fixed; left:8px; top:8px; color:#ddd; font-family:monospace; z-index:2; }
+    label{display:inline-block;margin-right:8px}
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <label>Spacing: <input id="spacing" type="range" min="8" max="120" value="48"></label>
+    <label>Connection dist: <input id="conn" type="range" min="20" max="220" value="90"></label>
+    <button id="regen">Regenerate</button>
+  </div>
+  <canvas id="c"></canvas>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha:true });
+  let W=0,H=0;
+  function resize(){
+    W = canvas.width = Math.floor(innerWidth * devicePixelRatio);
+    H = canvas.height = Math.floor(innerHeight * devicePixelRatio);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // Example polyline specified in screen coordinates (x,y)
+  // You can replace this with any polyline in the form [{x:..,y:..}, ...]
+  const basePolyline = [
+    {x: 0.10, y: 0.25},
+    {x: 0.20, y: 0.15},
+    {x: 0.34, y: 0.18},
+    {x: 0.45, y: 0.30},
+    {x: 0.55, y: 0.20},
+    {x: 0.66, y: 0.35},
+    {x: 0.78, y: 0.30},
+    {x: 0.88, y: 0.45}
+  ].map(p => ({ x: p.x * innerWidth, y: p.y * innerHeight }));
+
+  // Parameters & UI
+  const spacingInput = document.getElementById('spacing');
+  const connInput = document.getElementById('conn');
+  const regenBtn = document.getElementById('regen');
+
+  function samplePolyline(polyline, spacingPx, jitter=2) {
+    // returns array of points sampled along polyline with optional small jitter
+    const pts = [];
+    for (let i=0;i<polyline.length-1;i++){
+      const a = polyline[i], b = polyline[i+1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const segLen = Math.hypot(dx,dy);
+      const count = Math.max(1, Math.floor(segLen / spacingPx));
+      for (let k=0;k<=count-1;k++){
+        const t = k / count;
+        const x = a.x + dx * t + (Math.random()*2-1) * jitter;
+        const y = a.y + dy * t + (Math.random()*2-1) * jitter;
+        pts.push({x,y});
+      }
+    }
+    // include final vertex
+    pts.push(polyline[polyline.length-1]);
+    return pts;
+  }
+
+  function addBackgroundStars(n, margin=20) {
+    const arr = [];
+    for (let i=0;i<n;i++){
+      arr.push({
+        x: margin + Math.random() * (innerWidth - margin*2),
+        y: margin + Math.random() * (innerHeight - margin*2),
+        r: 0.4 + Math.random()*1.6,
+        tw: Math.random()*Math.PI*2, // phase
+        speed: 0.003 + Math.random()*0.007
+      });
+    }
+    return arr;
+  }
+
+  // Build constellation (stars + connections)
+  function buildConstellation(polyline, spacing, extraStars=40){
+    const starPositions = samplePolyline(polyline, spacing, 1.6);
+    // convert to star objects with animation params
+    const stars = starPositions.map((p,i) => ({
+      x: p.x, y: p.y,
+      rBase: 1.6 + Math.random()*1.8,
+      phase: Math.random()*Math.PI*2,
+      speed: 0.004 + Math.random()*0.008,
+      id: 'poly-'+i
+    }));
+
+    // add a few random stars near the polyline
+    const bg = addBackgroundStars(extraStars);
+    const allStars = stars.concat(bg);
+
+    return {stars: allStars};
+  }
+
+  // Drawing helpers
+  function drawBackground() {
+    // subtle gradient sky
+    const g = ctx.createLinearGradient(0,0,0,innerHeight);
+    g.addColorStop(0, '#03040a'); g.addColorStop(1, '#000115');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+
+    // faint milky band
+    ctx.save();
+    ctx.globalAlpha = 0.03;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(innerWidth*0.6, innerHeight*0.45, innerWidth*0.6, innerHeight*0.25, Math.PI/8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawFrame(state, t) {
+    drawBackground();
+
+    // connections
+    const connDist = Number(connInput.value);
+    ctx.lineWidth = 1;
+    for (let i=0;i<state.stars.length;i++){
+      const a = state.stars[i];
+      for (let j=i+1;j<state.stars.length;j++){
+        const b = state.stars[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.hypot(dx,dy);
+        if (d <= connDist) {
+          const alpha = 0.5 * (1 - d / connDist);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = `rgba(180,200,255,${alpha*0.9})`;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // draw stars (twinkle)
+    for (const s of state.stars){
+      s.phase += s.speed;
+      const tw = 0.6 + 0.4 * Math.sin(s.phase + (t/800));
+      const r = (s.rBase || s.r) * tw;
+      // halo
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(200,220,255,${0.06 * r})`;
+      ctx.arc(s.x, s.y, 6 * r, 0, Math.PI*2);
+      ctx.fill();
+      // core
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(255,255,255,${0.9})`;
+      ctx.arc(s.x, s.y, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // initial state
+  let state = buildConstellation(basePolyline, Number(spacingInput.value), 40);
+
+  // allow regenerate when window size changed to resample polyline coordinates relative to new size
+  function regenerate(){
+    // if polyline is defined in percentages, recalc; here original basePolyline already scaled on load.
+    // re-sample using current spacing and current polyline
+    // If you want a polyline that scales, re-create from normalized points; for demo we scale from normalized list:
+    const normalized = [
+      {x: 0.10, y: 0.25},
+      {x: 0.20, y: 0.15},
+      {x: 0.34, y: 0.18},
+      {x: 0.45, y: 0.30},
+      {x: 0.55, y: 0.20},
+      {x: 0.66, y: 0.35},
+      {x: 0.78, y: 0.30},
+      {x: 0.88, y: 0.45}
+    ];
+    const poly = normalized.map(p => ({ x: p.x * innerWidth, y: p.y * innerHeight }));
+    state = buildConstellation(poly, Number(spacingInput.value), 40);
+  }
+
+  regenBtn.addEventListener('click', regenerate);
+  spacingInput.addEventListener('input', regenerate);
+  connInput.addEventListener('input', () => {}); // live connection changes without regen
+
+  // animation loop
+  let then = performance.now();
+  function loop(now){
+    const dt = now - then;
+    then = now;
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    drawFrame(state, now);
+    requestAnimationFrame(loop);
+  }
+  regenerate();
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
